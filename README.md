@@ -20,6 +20,8 @@ The url format for your database may vary! The example below uses a MySQL databa
 set {sql} to the database "mysql://localhost:3306/sys?user=admin&password=12345&useSSL=false"
 ```
 
+---
+
 ### Effect `Execute Statement`
 
 Executes a statement on a database and optionally stores the result in a variable. Expressions embedded in the query will be escaped to avoid SQL injection.
@@ -40,6 +42,8 @@ execute "select * from table" in {sql} and store the result in {output::*}
 execute "select * from %{table variable}%" in {sql} and store the result in {output::*}
 ```
 
+---
+
 ### Expression `Unsafe Expression` => `text`
 
 Opts out of automatic SQL injection protection for a specific expression in a statement.
@@ -55,6 +59,8 @@ execute "select %unsafe {columns variable}% from %{table variable}%" in {sql} an
 execute unsafe {fully dynamic query} in {sql}
 ```
 
+---
+
 ### Expression `Last Data Source Error` => `text`
 
 Stores the error from the last executed statement, if there was one.
@@ -62,3 +68,5 @@ Stores the error from the last executed statement, if there was one.
 #### Syntax
 
 `[the] [last] (sql|db|data(base|[ ]source)) error`
+
+---
