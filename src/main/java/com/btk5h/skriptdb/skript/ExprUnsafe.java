@@ -3,12 +3,23 @@ package com.btk5h.skriptdb.skript;
 import org.bukkit.event.Event;
 
 import ch.njol.skript.Skript;
+import ch.njol.skript.doc.Description;
+import ch.njol.skript.doc.Examples;
+import ch.njol.skript.doc.Name;
+import ch.njol.skript.doc.Since;
 import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.ExpressionType;
 import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 
+@Name("Unsafe Expression")
+@Description("Opts out of automatic SQL injection protection for a specific expression in a statement.")
+@Examples({
+		"execute \"select %unsafe {columns variable}% from %{table variable}%\" in {sql} and store the result in {output::*}",
+		"execute unsafe {fully dynamic query} in {sql}"
+})
+@Since("0.1.0")
 public class ExprUnsafe extends SimpleExpression<String> {
   static {
     Skript.registerExpression(ExprUnsafe.class, String.class, ExpressionType.COMBINED,
