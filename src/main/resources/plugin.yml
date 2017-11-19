@@ -1,0 +1,4 @@
+name: skript-db
+version: 0.1.0
+main: com.btk5h.skriptdb.SkriptDB
+depend: [Skript]

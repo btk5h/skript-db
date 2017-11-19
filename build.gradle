@@ -1,0 +1,35 @@
+group 'com.btk5h.skript-db'
+version '0.1.0'
+
+buildscript {
+  repositories {
+    jcenter()
+  }
+  dependencies {
+    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+  }
+}
+
+apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'java'
+
+sourceCompatibility = 1.8
+
+repositories {
+  mavenCentral()
+  maven {
+    url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
+  }
+  maven {
+    url 'https://oss.sonatype.org/content/groups/public/'
+  }
+  maven {
+    url 'http://maven.njol.ch/repo/'
+  }
+}
+
+dependencies {
+  shadow 'org.spigotmc:spigot-api:1.11-R0.1-SNAPSHOT'
+  shadow 'ch.njol:skript:2.2-SNAPSHOT'
+  compile 'com.zaxxer:HikariCP:2.6.2'
+}
