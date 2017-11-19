@@ -5,12 +5,24 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.bukkit.event.Event;
 
 import ch.njol.skript.Skript;
+import ch.njol.skript.doc.Description;
+import ch.njol.skript.doc.Examples;
+import ch.njol.skript.doc.Name;
+import ch.njol.skript.doc.Since;
 import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.ExpressionType;
 import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 
+@Name("Data Source")
+@Description("This stores the connection information for a data source. This should be saved to a variable in a `script load` event or manually through an effect command." +
+		"\n\n" +
+		"The URL format for your database may vary! The example below uses a MySQL database.")
+@Examples({
+		"set {sql} to the database \"mysql://localhost:3306/mydatabase?user=admin&password=12345&useSSL=false\""
+})
+@Since("0.1.0")
 public class ExprDataSource extends SimpleExpression<HikariDataSource> {
   static {
     Skript.registerExpression(ExprDataSource.class, HikariDataSource.class,
