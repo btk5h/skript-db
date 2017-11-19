@@ -17,7 +17,7 @@ The url format for your database may vary! The example below uses a MySQL databa
 #### Example
 
 ```
-set {sql} to the database "mysql://localhost:3306/sys?user=admin&password=12345&useSSL=false"
+set {sql} to the database "mysql://localhost:3306/mydatabase?user=admin&password=12345&useSSL=false"
 ```
 
 ---
