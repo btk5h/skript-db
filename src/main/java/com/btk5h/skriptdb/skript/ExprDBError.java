@@ -3,12 +3,18 @@ package com.btk5h.skriptdb.skript;
 import org.bukkit.event.Event;
 
 import ch.njol.skript.Skript;
+import ch.njol.skript.doc.Description;
+import ch.njol.skript.doc.Name;
+import ch.njol.skript.doc.Since;
 import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.ExpressionType;
 import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 
+@Name("Last Data Source Error")
+@Description("Stores the error from the last executed statement, if there was one.")
+@Since("0.1.0")
 public class ExprDBError extends SimpleExpression<String> {
   static {
     Skript.registerExpression(ExprDBError.class, String.class,
