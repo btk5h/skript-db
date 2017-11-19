@@ -23,6 +23,10 @@ import javax.sql.rowset.CachedRowSet;
 
 import ch.njol.skript.Skript;
 import ch.njol.skript.effects.Delay;
+import ch.njol.skript.doc.Description;
+import ch.njol.skript.doc.Examples;
+import ch.njol.skript.doc.Name;
+import ch.njol.skript.doc.Since;
 import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.TriggerItem;
@@ -31,6 +35,18 @@ import ch.njol.skript.lang.VariableString;
 import ch.njol.skript.variables.Variables;
 import ch.njol.util.Kleenean;
 
+@Name("Execute Statement")
+@Description("Executes a statement on a database and optionally stores the result in a variable. " +
+		"Expressions embedded in the query will be escaped to avoid SQL injection." +
+		"\n\n" +
+		"If a single variable, such as `{test}`, is passed, the variable will be set to the number of affected rows." +
+		"\n\n" +
+		"If a list variable, such as `{test::*}`, is passed, the query result will be mapped to the list variable in the form `{test::<column name>::<row number>}`")
+@Examples({
+		"execute \"select * from table\" in {sql} and store the result in {output::*}",
+		"execute \"select * from %{table variable}%\" in {sql} and store the result in {output::*}"
+})
+@Since("0.1.0")
 public class EffExecuteStatement extends Delay {
   static {
     Skript.registerEffect(EffExecuteStatement.class,
