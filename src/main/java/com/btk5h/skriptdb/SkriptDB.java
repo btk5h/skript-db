@@ -35,7 +35,15 @@ import javax.sql.rowset.RowSetProvider;
 
 import ch.njol.skript.Skript;
 import ch.njol.skript.SkriptAddon;
+import ch.njol.skript.doc.Since;
 
+/**
+ * # skript-db
+ *
+ * > Sensible SQL support for Skript.
+ *
+ * @index -1
+ */
 public final class SkriptDB extends JavaPlugin {
 
   private static SkriptDB instance;

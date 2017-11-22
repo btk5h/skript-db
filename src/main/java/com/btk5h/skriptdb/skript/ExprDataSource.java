@@ -11,6 +11,19 @@ import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 
+/**
+ * Stores the connection information for a data source. This should be saved to a variable in a
+ * `script load` event or manually through an effect command.
+ *
+ * The url format for your database may vary! The example provided uses a MySQL database.
+ *
+ * @name Data Source
+ * @index -1
+ * @pattern [the] data(base|[ ]source) [(of|at)] %string%
+ * @return datasource
+ * @example set {sql} to the database "mysql://localhost:3306/mydatabase?user=admin&password=12345&useSSL=false"
+ * @since 0.1.0
+ */
 public class ExprDataSource extends SimpleExpression<HikariDataSource> {
   static {
     Skript.registerExpression(ExprDataSource.class, HikariDataSource.class,
@@ -33,7 +46,7 @@ public class ExprDataSource extends SimpleExpression<HikariDataSource> {
     HikariDataSource ds = new HikariDataSource();
     ds.setJdbcUrl(jdbcUrl);
 
-    return new HikariDataSource[] {ds};
+    return new HikariDataSource[]{ds};
   }
 
   @Override

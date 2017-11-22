@@ -9,6 +9,16 @@ import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 
+/**
+ * Opts out of automatic SQL injection protection for a specific expression in a statement.
+ *
+ * @name Unsafe Expression
+ * @pattern unsafe %text%
+ * @return text
+ * @example execute "select %unsafe {columns variable}% from %{table variable}%" in {sql}
+ * @example execute unsafe {fully dynamic query} in {sql}
+ * @since 0.1.0
+ */
 public class ExprUnsafe extends SimpleExpression<String> {
   static {
     Skript.registerExpression(ExprUnsafe.class, String.class, ExpressionType.COMBINED,

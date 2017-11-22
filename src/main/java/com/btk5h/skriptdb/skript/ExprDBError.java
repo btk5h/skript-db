@@ -9,6 +9,14 @@ import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.util.SimpleExpression;
 import ch.njol.util.Kleenean;
 
+/**
+ * Stores the error from the last executed statement, if there was one.
+ *
+ * @name Last Data Source Error
+ * @pattern [the] [last] (sql|db|data(base|[ ]source)) error
+ * @return text
+ * @since 0.1.0
+ */
 public class ExprDBError extends SimpleExpression<String> {
   static {
     Skript.registerExpression(ExprDBError.class, String.class,
