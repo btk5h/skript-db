@@ -35,7 +35,6 @@ import javax.sql.rowset.RowSetProvider;
 
 import ch.njol.skript.Skript;
 import ch.njol.skript.SkriptAddon;
-import ch.njol.skript.doc.Since;
 
 /**
  * # skript-db
