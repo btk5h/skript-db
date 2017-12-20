@@ -4,6 +4,9 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import org.bukkit.event.Event;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import ch.njol.skript.Skript;
 import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.ExpressionType;
@@ -30,6 +33,8 @@ public class ExprDataSource extends SimpleExpression<HikariDataSource> {
         ExpressionType.COMBINED, "[the] data(base|[ ]source) [(of|at)] %string%");
   }
 
+  private static Map<String, HikariDataSource> connectionCache = new HashMap<>();
+
   private Expression<String> url;
 
   @Override
@@ -43,8 +48,14 @@ public class ExprDataSource extends SimpleExpression<HikariDataSource> {
       jdbcUrl = "jdbc:" + jdbcUrl;
     }
 
+    if (connectionCache.containsKey(jdbcUrl)) {
+      return new HikariDataSource[]{connectionCache.get(jdbcUrl)};
+    }
+
     HikariDataSource ds = new HikariDataSource();
     ds.setJdbcUrl(jdbcUrl);
+
+    connectionCache.put(jdbcUrl, ds);
 
     return new HikariDataSource[]{ds};
   }
