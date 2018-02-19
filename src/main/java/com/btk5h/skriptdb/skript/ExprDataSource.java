@@ -12,6 +12,7 @@ import ch.njol.skript.lang.Expression;
 import ch.njol.skript.lang.ExpressionType;
 import ch.njol.skript.lang.SkriptParser;
 import ch.njol.skript.lang.util.SimpleExpression;
+import ch.njol.skript.util.Timespan;
 import ch.njol.util.Kleenean;
 
 /**
@@ -22,7 +23,7 @@ import ch.njol.util.Kleenean;
  *
  * @name Data Source
  * @index -1
- * @pattern [the] data(base|[ ]source) [(of|at)] %string%
+ * @pattern [the] data(base|[ ]source) [(of|at)] %string% [with [a] [max[imum]] [connection] life[ ]time of %timespan%]"
  * @return datasource
  * @example set {sql} to the database "mysql://localhost:3306/mydatabase?user=admin&password=12345&useSSL=false"
  * @since 0.1.0
@@ -30,12 +31,14 @@ import ch.njol.util.Kleenean;
 public class ExprDataSource extends SimpleExpression<HikariDataSource> {
   static {
     Skript.registerExpression(ExprDataSource.class, HikariDataSource.class,
-        ExpressionType.COMBINED, "[the] data(base|[ ]source) [(of|at)] %string%");
+        ExpressionType.COMBINED, "[the] data(base|[ ]source) [(of|at)] %string% " +
+            "[with [a] [max[imum]] [connection] life[ ]time of %timespan%]");
   }
 
   private static Map<String, HikariDataSource> connectionCache = new HashMap<>();
 
   private Expression<String> url;
+  private Expression<Timespan> maxLifetime;
 
   @Override
   protected HikariDataSource[] get(Event e) {
@@ -54,6 +57,14 @@ public class ExprDataSource extends SimpleExpression<HikariDataSource> {
 
     HikariDataSource ds = new HikariDataSource();
     ds.setJdbcUrl(jdbcUrl);
+
+    if (maxLifetime != null) {
+      Timespan l = maxLifetime.getSingle(e);
+
+      if (l != null) {
+        ds.setMaxLifetime(l.getMilliSeconds());
+      }
+    }
 
     connectionCache.put(jdbcUrl, ds);
 
@@ -80,6 +91,7 @@ public class ExprDataSource extends SimpleExpression<HikariDataSource> {
   public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed,
                       SkriptParser.ParseResult parseResult) {
     url = (Expression<String>) exprs[0];
+    maxLifetime = (Expression<Timespan>) exprs[1];
     return true;
   }
 }
