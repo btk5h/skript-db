@@ -34,10 +34,10 @@ import ch.njol.util.Kleenean;
 /**
  * Executes a statement on a database and optionally stores the result in a variable. Expressions
  * embedded in the query will be escaped to avoid SQL injection.
- *
+ * <p>
  * If a single variable, such as `{test}`, is passed, the variable will be set to the number of
  * affected rows.
- *
+ * <p>
  * If a list variable, such as `{test::*}`, is passed, the query result will be mapped to the list
  * variable in the form `{test::<column name>::<row number>}`
  *
@@ -145,16 +145,41 @@ public class EffExecuteStatement extends Delay {
     StringBuilder sb = new StringBuilder();
     List<Object> parameters = new ArrayList<>();
     Object[] objects = SkriptUtil.getTemplateString(((VariableString) query));
-    for (Object o : objects) {
+    for (int i = 0; i < objects.length; i++) {
+      Object o = objects[i];
       if (o instanceof String) {
         sb.append(o);
       } else {
         Expression<?> expr = SkriptUtil.getExpressionFromInfo(o);
+
+        String before = getString(objects, i - 1);
+        String after = getString(objects, i + 1);
+        boolean standaloneString = false;
+
+        if (before != null && after != null) {
+          if (before.endsWith("'") && after.endsWith("'")) {
+            standaloneString = true;
+          }
+        }
+
+        Object expressionValue = expr.getSingle(e);
+
         if (expr instanceof ExprUnsafe) {
-          sb.append(expr.getSingle(e));
+          sb.append(expressionValue);
+
+          if (standaloneString && expressionValue instanceof String) {
+            String rawExpression = ((ExprUnsafe) expr).getRawExpression();
+            Skript.warning(
+                String.format("Unsafe may have been used unnecessarily. Try replacing 'unsafe %1$s' with %1$s",
+                    rawExpression));
+          }
         } else {
-          parameters.add(expr.getSingle(e));
+          parameters.add(expressionValue);
           sb.append('?');
+
+          if (standaloneString) {
+            Skript.warning("Do not surround expressions with quotes!");
+          }
         }
       }
     }
@@ -166,6 +191,20 @@ public class EffExecuteStatement extends Delay {
     }
 
     return stmt;
+  }
+
+  private String getString(Object[] objects, int index) {
+    if (index < 0 || index >= objects.length) {
+      return null;
+    }
+
+    Object object = objects[index];
+
+    if (object instanceof String) {
+      return (String) object;
+    }
+
+    return null;
   }
 
   private void setVariable(Event e, String name, Object obj) {

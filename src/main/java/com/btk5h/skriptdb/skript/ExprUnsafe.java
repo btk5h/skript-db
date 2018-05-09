@@ -25,11 +25,16 @@ public class ExprUnsafe extends SimpleExpression<String> {
         "unsafe %string%");
   }
 
-  private Expression<String> str;
+  private Expression<String> stringExpression;
+  private String rawExpression;
+
+  public String getRawExpression() {
+    return rawExpression;
+  }
 
   @Override
   protected String[] get(Event e) {
-    return str.getArray(e);
+    return stringExpression.getArray(e);
   }
 
   @Override
@@ -44,14 +49,15 @@ public class ExprUnsafe extends SimpleExpression<String> {
 
   @Override
   public String toString(Event e, boolean debug) {
-    return "unsafe " + str.toString(e, debug);
+    return "unsafe " + stringExpression.toString(e, debug);
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed,
                       SkriptParser.ParseResult parseResult) {
-    str = (Expression<String>) exprs[0];
+    stringExpression = (Expression<String>) exprs[0];
+    rawExpression = parseResult.expr.substring("unsafe".length()).trim();
     return true;
   }
 }
