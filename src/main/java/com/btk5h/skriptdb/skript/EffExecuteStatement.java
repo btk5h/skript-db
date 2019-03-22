@@ -1,35 +1,27 @@
 package com.btk5h.skriptdb.skript;
 
+import ch.njol.skript.Skript;
+import ch.njol.skript.effects.Delay;
+import ch.njol.skript.lang.*;
+import ch.njol.skript.variables.Variables;
+import ch.njol.util.Kleenean;
+import ch.njol.util.Pair;
 import com.btk5h.skriptdb.SkriptDB;
 import com.btk5h.skriptdb.SkriptUtil;
 import com.zaxxer.hikari.HikariDataSource;
-
 import org.bukkit.Bukkit;
 import org.bukkit.event.Event;
-import org.eclipse.jdt.annotation.Nullable;
 
+import javax.sql.DataSource;
+import javax.sql.rowset.CachedRowSet;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import javax.sql.rowset.CachedRowSet;
-
-import ch.njol.skript.Skript;
-import ch.njol.skript.effects.Delay;
-import ch.njol.skript.lang.Expression;
-import ch.njol.skript.lang.SkriptParser;
-import ch.njol.skript.lang.TriggerItem;
-import ch.njol.skript.lang.Variable;
-import ch.njol.skript.lang.VariableString;
-import ch.njol.skript.variables.Variables;
-import ch.njol.util.Kleenean;
 
 /**
  * Executes a statement on a database and optionally stores the result in a variable. Expressions
@@ -65,11 +57,20 @@ public class EffExecuteStatement extends Delay {
   private VariableString var;
   private boolean isLocal;
   private boolean isList;
+  private Map<String, Object> doLater = new HashMap<>();
 
   @Override
   protected void execute(Event e) {
+    DataSource ds = dataSource.getSingle(e);
+    Pair<String, List<Object>> query = parseQuery(e);
+    String baseVariable = var != null ? var.toString(e).toLowerCase(Locale.ENGLISH) : null;
+
+    if (ds == null)
+      return;
+
+    Object locals = Variables.removeLocals(e);
     CompletableFuture<String> sql =
-        CompletableFuture.supplyAsync(() -> executeStatement(e), threadPool);
+        CompletableFuture.supplyAsync(() -> executeStatement(ds, baseVariable, query), threadPool);
 
     sql.whenComplete((res, err) -> {
       if (err != null) {
@@ -80,7 +81,12 @@ public class EffExecuteStatement extends Delay {
         lastError = res;
 
         if (getNext() != null) {
+          if (locals != null)
+            Variables.setLocalVariables(e, locals);
+          doLater.forEach((name, value) -> setVariable(e, name, value));
+          doLater.clear();
           TriggerItem.walk(getNext(), e);
+          Variables.removeLocals(e);
         }
       });
     });
@@ -89,62 +95,24 @@ public class EffExecuteStatement extends Delay {
   @Override
   protected TriggerItem walk(Event e) {
     debug(e, true);
-    SkriptUtil.delay(e);
+    Delay.addDelayedEvent(e);
     execute(e);
     return null;
   }
 
-  private String executeStatement(Event e) {
-    HikariDataSource ds = dataSource.getSingle(e);
-
-    if (ds == null) {
-      return "Data source is not set";
-    }
-
-    try (Connection conn = ds.getConnection();
-         PreparedStatement stmt = createStatement(e, conn)) {
-
-      boolean hasResultSet = stmt.execute();
-
-      if (var != null) {
-        String baseVariable = var.toString(e)
-            .toLowerCase(Locale.ENGLISH);
-        if (isList) {
-          baseVariable = baseVariable.substring(0, baseVariable.length() - 1);
-        }
-
-        if (hasResultSet) {
-          CachedRowSet crs = SkriptDB.getRowSetFactory().createCachedRowSet();
-          crs.populate(stmt.getResultSet());
-
-          if (isList) {
-            populateVariable(e, crs, baseVariable);
-          } else {
-            crs.last();
-            setVariable(e, baseVariable, crs.getRow());
-          }
-        } else if (!isList) {
-          setVariable(e, baseVariable, stmt.getUpdateCount());
-        }
-      }
-    } catch (SQLException ex) {
-      return ex.getMessage();
-    }
-    return null;
-  }
-
-  private PreparedStatement createStatement(Event e, Connection conn) throws SQLException {
+  private Pair<String, List<Object>> parseQuery(Event e) {
     if (!(query instanceof VariableString)) {
-      return conn.prepareStatement(query.getSingle(e));
+      return new Pair<>(query.getSingle(e), null);
     }
-
-    if (((VariableString) query).isSimple()) {
-      return conn.prepareStatement(SkriptUtil.getSimpleString(((VariableString) query)));
+    VariableString q = (VariableString) query;
+    if (q.isSimple()) {
+      return new Pair<>(q.toString(e), null);
     }
 
     StringBuilder sb = new StringBuilder();
     List<Object> parameters = new ArrayList<>();
-    Object[] objects = SkriptUtil.getTemplateString(((VariableString) query));
+    Object[] objects = SkriptUtil.getTemplateString(q);
+
     for (int i = 0; i < objects.length; i++) {
       Object o = objects[i];
       if (o instanceof String) {
@@ -183,11 +151,52 @@ public class EffExecuteStatement extends Delay {
         }
       }
     }
+    return new Pair<>(sb.toString(), parameters);
+  }
 
-    PreparedStatement stmt = conn.prepareStatement(sb.toString());
+  private String executeStatement(DataSource ds, String baseVariable, Pair<String, List<Object>> query) {
+    if (ds == null) {
+      return "Data source is not set";
+    }
 
-    for (int i = 0; i < parameters.size(); i++) {
-      stmt.setObject(i + 1, parameters.get(i));
+    try (Connection conn = ds.getConnection();
+         PreparedStatement stmt = createStatement(conn, query)) {
+
+      boolean hasResultSet = stmt.execute();
+
+      if (baseVariable != null) {
+        if (isList) {
+          baseVariable = baseVariable.substring(0, baseVariable.length() - 1);
+        }
+
+        if (hasResultSet) {
+          CachedRowSet crs = SkriptDB.getRowSetFactory().createCachedRowSet();
+          crs.populate(stmt.getResultSet());
+
+          if (isList) {
+            populateVariable(crs, baseVariable);
+          } else {
+            crs.last();
+            doLater.put(baseVariable, crs.getRow());
+          }
+        } else if (!isList) {
+          doLater.put(baseVariable, stmt.getUpdateCount());
+        }
+      }
+    } catch (SQLException ex) {
+      return ex.getMessage();
+    }
+    return null;
+  }
+
+  private PreparedStatement createStatement(Connection conn, Pair<String, List<Object>> query) throws SQLException {
+    PreparedStatement stmt = conn.prepareStatement(query.getFirst());
+    List<Object> parameters = query.getSecond();
+
+    if (parameters != null) {
+      for (int i = 0; i < parameters.size(); i++) {
+        stmt.setObject(i + 1, parameters.get(i));
+      }
     }
 
     return stmt;
@@ -211,20 +220,20 @@ public class EffExecuteStatement extends Delay {
     Variables.setVariable(name.toLowerCase(Locale.ENGLISH), obj, e, isLocal);
   }
 
-  private void populateVariable(Event e, CachedRowSet crs, String baseVariable)
+  private void populateVariable(CachedRowSet crs, String baseVariable)
       throws SQLException {
     ResultSetMetaData meta = crs.getMetaData();
     int columnCount = meta.getColumnCount();
 
     for (int i = 1; i <= columnCount; i++) {
       String label = meta.getColumnLabel(i);
-      setVariable(e, baseVariable + label, label);
+       doLater.put(baseVariable + label, label);
     }
 
     int rowNumber = 1;
     while (crs.next()) {
       for (int i = 1; i <= columnCount; i++) {
-        setVariable(e, baseVariable + meta.getColumnLabel(i).toLowerCase(Locale.ENGLISH)
+        doLater.put(baseVariable + meta.getColumnLabel(i).toLowerCase(Locale.ENGLISH)
             + Variable.SEPARATOR + rowNumber, crs.getObject(i));
       }
       rowNumber++;
@@ -232,7 +241,7 @@ public class EffExecuteStatement extends Delay {
   }
 
   @Override
-  public String toString(@Nullable Event e, boolean debug) {
+  public String toString(Event e, boolean debug) {
     return "execute " + query.toString(e, debug) + " in " + dataSource.toString(e, debug);
   }
 
@@ -253,7 +262,7 @@ public class EffExecuteStatement extends Delay {
     Expression<?> expr = exprs[2];
     if (expr instanceof Variable) {
       Variable<?> varExpr = (Variable<?>) expr;
-      var = SkriptUtil.getVariableName(varExpr);
+      var = varExpr.getName();
       isLocal = varExpr.isLocal();
       isList = varExpr.isList();
     } else if (expr != null) {

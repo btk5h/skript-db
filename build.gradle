@@ -6,7 +6,7 @@ buildscript {
     jcenter()
   }
   dependencies {
-    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.2'
   }
 }
 
@@ -24,14 +24,16 @@ repositories {
     url 'https://oss.sonatype.org/content/groups/public/'
   }
   maven {
-    url 'http://maven.njol.ch/repo/'
+    url 'http://jitpack.io/'
   }
 }
 
 dependencies {
-  shadow 'org.spigotmc:spigot-api:1.11-R0.1-SNAPSHOT'
-  shadow 'ch.njol:skript:2.2-SNAPSHOT'
-  compile 'com.zaxxer:HikariCP:2.6.2'
+  shadow 'org.spigotmc:spigot-api:1.13.2-R0.1-SNAPSHOT'
+  shadow('com.github.SkriptLang:Skript:2.3.6') {
+    transitive = false
+  }
+  compile 'com.zaxxer:HikariCP:3.3.1'
 }
 
 task buildReadme(type: Javadoc) {
