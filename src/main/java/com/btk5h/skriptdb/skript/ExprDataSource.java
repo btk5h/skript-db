@@ -32,7 +32,7 @@ public class ExprDataSource extends SimpleExpression<HikariDataSource> {
   static {
     Skript.registerExpression(ExprDataSource.class, HikariDataSource.class,
         ExpressionType.COMBINED, "[the] data(base|[ ]source) [(of|at)] %string% " +
-            "[with [a] [max[imum]] [connection] life[ ]time of %timespan%]");
+            "[with [a] [max[imum]] [connection] life[ ]time of %-timespan%]");
   }
 
   private static Map<String, HikariDataSource> connectionCache = new HashMap<>();

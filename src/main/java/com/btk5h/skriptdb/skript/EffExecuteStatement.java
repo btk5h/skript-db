@@ -1,33 +1,27 @@
 package com.btk5h.skriptdb.skript;
 
+import ch.njol.skript.Skript;
 import ch.njol.skript.effects.Delay;
 import ch.njol.skript.lang.*;
+import ch.njol.skript.variables.Variables;
+import ch.njol.util.Kleenean;
 import ch.njol.util.Pair;
 import com.btk5h.skriptdb.SkriptDB;
 import com.btk5h.skriptdb.SkriptUtil;
 import com.zaxxer.hikari.HikariDataSource;
-
 import org.bukkit.Bukkit;
 import org.bukkit.event.Event;
 
+import javax.sql.DataSource;
+import javax.sql.rowset.CachedRowSet;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import javax.sql.DataSource;
-import javax.sql.rowset.CachedRowSet;
-
-import ch.njol.skript.Skript;
-import ch.njol.skript.variables.Variables;
-import ch.njol.util.Kleenean;
-import ch.njol.util.Pair;
 
 /**
  * Executes a statement on a database and optionally stores the result in a variable. Expressions
@@ -63,18 +57,20 @@ public class EffExecuteStatement extends Delay {
   private VariableString var;
   private boolean isLocal;
   private boolean isList;
+  private Map<String, Object> doLater = new HashMap<>();
 
   @Override
   protected void execute(Event e) {
     DataSource ds = dataSource.getSingle(e);
     Pair<String, List<Object>> query = parseQuery(e);
+    String baseVariable = var != null ? var.toString(e).toLowerCase(Locale.ENGLISH) : null;
 
     if (ds == null)
       return;
 
     Object locals = Variables.removeLocals(e);
     CompletableFuture<String> sql =
-        CompletableFuture.supplyAsync(() -> executeStatement(e, ds, query), threadPool);
+        CompletableFuture.supplyAsync(() -> executeStatement(ds, baseVariable, query), threadPool);
 
     sql.whenComplete((res, err) -> {
       if (err != null) {
@@ -87,6 +83,8 @@ public class EffExecuteStatement extends Delay {
         if (getNext() != null) {
           if (locals != null)
             Variables.setLocalVariables(e, locals);
+          doLater.forEach((name, value) -> setVariable(e, name, value));
+          doLater.clear();
           TriggerItem.walk(getNext(), e);
           Variables.removeLocals(e);
         }
@@ -156,7 +154,7 @@ public class EffExecuteStatement extends Delay {
     return new Pair<>(sb.toString(), parameters);
   }
 
-  private String executeStatement(Event e, DataSource ds, Pair<String, List<Object>> query) {
+  private String executeStatement(DataSource ds, String baseVariable, Pair<String, List<Object>> query) {
     if (ds == null) {
       return "Data source is not set";
     }
@@ -166,9 +164,7 @@ public class EffExecuteStatement extends Delay {
 
       boolean hasResultSet = stmt.execute();
 
-      if (var != null) {
-        String baseVariable = var.toString(e)
-            .toLowerCase(Locale.ENGLISH);
+      if (baseVariable != null) {
         if (isList) {
           baseVariable = baseVariable.substring(0, baseVariable.length() - 1);
         }
@@ -178,13 +174,13 @@ public class EffExecuteStatement extends Delay {
           crs.populate(stmt.getResultSet());
 
           if (isList) {
-            populateVariable(e, crs, baseVariable);
+            populateVariable(crs, baseVariable);
           } else {
             crs.last();
-            setVariable(e, baseVariable, crs.getRow());
+            doLater.put(baseVariable, crs.getRow());
           }
         } else if (!isList) {
-          setVariable(e, baseVariable, stmt.getUpdateCount());
+          doLater.put(baseVariable, stmt.getUpdateCount());
         }
       }
     } catch (SQLException ex) {
@@ -224,20 +220,20 @@ public class EffExecuteStatement extends Delay {
     Variables.setVariable(name.toLowerCase(Locale.ENGLISH), obj, e, isLocal);
   }
 
-  private void populateVariable(Event e, CachedRowSet crs, String baseVariable)
+  private void populateVariable(CachedRowSet crs, String baseVariable)
       throws SQLException {
     ResultSetMetaData meta = crs.getMetaData();
     int columnCount = meta.getColumnCount();
 
     for (int i = 1; i <= columnCount; i++) {
       String label = meta.getColumnLabel(i);
-      setVariable(e, baseVariable + label, label);
+       doLater.put(baseVariable + label, label);
     }
 
     int rowNumber = 1;
     while (crs.next()) {
       for (int i = 1; i <= columnCount; i++) {
-        setVariable(e, baseVariable + meta.getColumnLabel(i).toLowerCase(Locale.ENGLISH)
+        doLater.put(baseVariable + meta.getColumnLabel(i).toLowerCase(Locale.ENGLISH)
             + Variable.SEPARATOR + rowNumber, crs.getObject(i));
       }
       rowNumber++;

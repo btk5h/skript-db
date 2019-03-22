@@ -30,7 +30,9 @@ repositories {
 
 dependencies {
   shadow 'org.spigotmc:spigot-api:1.13.2-R0.1-SNAPSHOT'
-  shadow 'com.github.SkriptLang:Skript:2.3.6'
+  shadow('com.github.SkriptLang:Skript:2.3.6') {
+    transitive = false
+  }
   compile 'com.zaxxer:HikariCP:3.3.1'
 }
 
