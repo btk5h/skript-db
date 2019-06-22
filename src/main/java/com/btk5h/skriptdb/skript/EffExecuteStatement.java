@@ -41,17 +41,20 @@ import ch.njol.util.Kleenean;
  * If a list variable, such as `{test::*}`, is passed, the query result will be mapped to the list
  * variable in the form `{test::<column name>::<row number>}`
  *
+ * Specifying `synchronously` will make skript-db execute the query on the event thread, which is useful for async
+ * events. Note that skript-db will ignore this flag if you attempt to run this on the main thread.
+ *
  * @name Execute Statement
- * @pattern execute %string% (in|on) %datasource% [and store [[the] (output|result)[s]] (to|in)
+ * @pattern [synchronously] execute %string% (in|on) %datasource% [and store [[the] (output|result)[s]] (to|in)
  * [the] [var[iable]] %-objects%]
  * @example execute "select * from table" in {sql} and store the result in {output::*}
- * @example execute "select * from %{table variable}%" in {sql} and store the result in {output::*}
+ * @example execute "select * where player=%{player}%" in {sql} and store the result in {output::*}
  * @since 0.1.0
  */
 public class EffExecuteStatement extends Delay {
   static {
     Skript.registerEffect(EffExecuteStatement.class,
-        "execute %string% (in|on) %datasource% " +
+        "[(1¦synchronously)] execute %string% (in|on) %datasource% " +
             "[and store [[the] (output|result)[s]] (to|in) [the] [var[iable]] %-objects%]");
   }
 
@@ -65,25 +68,43 @@ public class EffExecuteStatement extends Delay {
   private VariableString var;
   private boolean isLocal;
   private boolean isList;
+  private boolean isSync;
+
+  private void continueScriptExecution(Event e, String res) {
+    lastError = res;
+
+    if (getNext() != null) {
+      TriggerItem.walk(getNext(), e);
+    }
+  }
 
   @Override
   protected void execute(Event e) {
-    CompletableFuture<String> sql =
-        CompletableFuture.supplyAsync(() -> executeStatement(e), threadPool);
+    boolean isMainThread = Bukkit.isPrimaryThread();
 
-    sql.whenComplete((res, err) -> {
-      if (err != null) {
-        err.printStackTrace();
+    if (isSync && !isMainThread) {
+      String result = executeStatement(e);
+      continueScriptExecution(e, result);
+    } else {
+      if (isMainThread) {
+        Skript.warning("A SQL query was attempted on the main thread!");
       }
 
-      Bukkit.getScheduler().runTask(SkriptDB.getInstance(), () -> {
-        lastError = res;
+      CompletableFuture<String> sql =
+          CompletableFuture.supplyAsync(() -> executeStatement(e), threadPool);
 
-        if (getNext() != null) {
-          TriggerItem.walk(getNext(), e);
+      sql.whenComplete((res, err) -> {
+        if (err != null) {
+          err.printStackTrace();
+        }
+
+        if (isSync) {
+          continueScriptExecution(e, res);
+        } else {
+          Bukkit.getScheduler().runTask(SkriptDB.getInstance(), () -> continueScriptExecution(e, res));
         }
       });
-    });
+    }
   }
 
   @Override
@@ -251,6 +272,7 @@ public class EffExecuteStatement extends Delay {
     }
     dataSource = (Expression<HikariDataSource>) exprs[1];
     Expression<?> expr = exprs[2];
+    isSync = parseResult.mark == 1;
     if (expr instanceof Variable) {
       Variable<?> varExpr = (Variable<?>) expr;
       var = SkriptUtil.getVariableName(varExpr);
