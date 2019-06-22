@@ -1,3 +1,8 @@
+# skript-db
+
+ > Sensible SQL support for Skript.
+---
+
 ### Effect `Execute Statement`
 Executes a statement on a database and optionally stores the result in a variable. Expressions
  embedded in the query will be escaped to avoid SQL injection.
@@ -49,11 +54,6 @@ execute "select %unsafe {columns variable}% from %{table variable}%" in {sql}
 execute unsafe {fully dynamic query} in {sql}
 ```
 
----
-
-# skript-db
-
- > Sensible SQL support for Skript.
 ---
 
 ### Expression `Data Source` => `datasource`
