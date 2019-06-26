@@ -86,7 +86,7 @@ public class EffExecuteStatement extends Delay {
       String result = executeStatement(e);
       continueScriptExecution(e, result);
     } else {
-      if (isMainThread) {
+      if (isSync) {
         Skript.warning("A SQL query was attempted on the main thread!");
       }
 
@@ -98,11 +98,7 @@ public class EffExecuteStatement extends Delay {
           err.printStackTrace();
         }
 
-        if (isSync) {
-          continueScriptExecution(e, res);
-        } else {
-          Bukkit.getScheduler().runTask(SkriptDB.getInstance(), () -> continueScriptExecution(e, res));
-        }
+        Bukkit.getScheduler().runTask(SkriptDB.getInstance(), () -> continueScriptExecution(e, res));
       });
     }
   }
