@@ -1,38 +1,46 @@
 plugins {
+  id 'java'
   id 'kr.entree.spigradle' version '2.4.3'
+  id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
+
+group 'com.btk5h.skript-db'
+version '1.0.0'
+
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.skriptlang.org/releases' }
+}
+
+compileJava.options.encoding 'UTF-8'
+
+dependencies {
+    compileOnly(spigot("1.19.2"))
+    compileOnly 'com.zaxxer:HikariCP:4.0.3'
+    implementation 'com.github.SkriptLang:Skript:2.6.3'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+}
+
+test {
+  useJUnitPlatform()
+}
+
+java {
+  toolchain {
+    languageVersion.set(JavaLanguageVersion.of(17))
+  }
+}
+
+spigot {
+  depends = ['Skript']
+  apiVersion = "1.19"
+}
+
 //
 //group 'com.btk5h.skript-db'
 //version '0.3.0'
-//
-//buildscript {
-//  repositories {
-//    jcenter()
-//  }
-//  dependencies {
-//    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
-//  }
-//}
-//
-//apply plugin: 'com.github.johnrengelman.shadow'
-//apply plugin: 'java'
-//
-//sourceCompatibility = 1.8
-//
-//repositories {
-//  mavenCentral()
-//  maven { url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
-//  maven { url 'https://oss.sonatype.org/content/groups/public/' }
-//  maven { url 'https://maven.njol.ch/repo/' }
-//}
-//
-//dependencies {
-//  shadow 'org.spigotmc:spigot-api:1.11-R0.1-SNAPSHOT'
-//  shadow 'ch.njol:skript:2.2-SNAPSHOT'
-//
-//  compile 'com.zaxxer:HikariCP:2.6.2'
-//}
-//
+
 //task buildReadme(type: Javadoc) {
 //  source = sourceSets.main.allJava
 //  classpath = sourceSets.main.compileClasspath
