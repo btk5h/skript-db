@@ -25,67 +25,64 @@
 
 package com.btk5h.skriptdb;
 
+import ch.njol.skript.Skript;
+import ch.njol.skript.SkriptAddon;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.io.IOException;
-import java.sql.SQLException;
 
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
-
-import ch.njol.skript.Skript;
-import ch.njol.skript.SkriptAddon;
+import java.io.IOException;
+import java.sql.SQLException;
 
 /**
  * # skript-db
- *
  * > Sensible SQL support for Skript.
- *
  * @index -1
  */
 public final class SkriptDB extends JavaPlugin {
 
-  private static SkriptDB instance;
-  private static SkriptAddon addonInstance;
+    private static SkriptDB instance;
+    private static SkriptAddon addonInstance;
 
-  private static RowSetFactory rowSetFactory;
+    private static RowSetFactory rowSetFactory;
 
-  public SkriptDB() {
-    if (instance == null) {
-      instance = this;
-    } else {
-      throw new IllegalStateException();
+    public SkriptDB() {
+        if (instance == null) {
+            instance = this;
+        } else {
+            throw new IllegalStateException();
+        }
     }
-  }
 
-  @Override
-  public void onEnable() {
-    try {
-      rowSetFactory = RowSetProvider.newFactory();
-
-      getAddonInstance().loadClasses("com.btk5h.skriptdb.skript");
-    } catch (SQLException e) {
-      throw new RuntimeException(e);
-    } catch (IOException e) {
-      e.printStackTrace();
+    public static SkriptAddon getAddonInstance() {
+        if (addonInstance == null) {
+            addonInstance = Skript.registerAddon(getInstance());
+        }
+        return addonInstance;
     }
-  }
 
-  public static SkriptAddon getAddonInstance() {
-    if (addonInstance == null) {
-      addonInstance = Skript.registerAddon(getInstance());
+    public static SkriptDB getInstance() {
+        if (instance == null) {
+            throw new IllegalStateException();
+        }
+        return instance;
     }
-    return addonInstance;
-  }
 
-  public static SkriptDB getInstance() {
-    if (instance == null) {
-      throw new IllegalStateException();
+    public static RowSetFactory getRowSetFactory() {
+        return rowSetFactory;
     }
-    return instance;
-  }
 
-  public static RowSetFactory getRowSetFactory() {
-    return rowSetFactory;
-  }
+    @Override
+    public void onEnable() {
+
+        try {
+            rowSetFactory = RowSetProvider.newFactory();
+
+            getAddonInstance().loadClasses("com.btk5h.skriptdb.skript");
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }

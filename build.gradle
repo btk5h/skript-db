@@ -10,14 +10,19 @@ version '1.0.0'
 repositories {
     mavenCentral()
     maven { url 'https://repo.skriptlang.org/releases' }
+    maven { url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    maven { url 'https://oss.sonatype.org/content/groups/public/' }
+    maven { url 'https://maven.njol.ch/repo/' }
 }
 
 compileJava.options.encoding 'UTF-8'
 
 dependencies {
-    compileOnly(spigot("1.19.2"))
-    compileOnly 'com.zaxxer:HikariCP:4.0.3'
-    implementation 'com.github.SkriptLang:Skript:2.6.3'
+    compileOnly spigot("1.19.2")
+    compileOnly('com.github.SkriptLang:Skript:2.6.3') {
+        transitive = false
+    }
+    implementation 'com.zaxxer:HikariCP:4.0.3'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
 }
@@ -37,15 +42,18 @@ spigot {
   apiVersion = "1.19"
 }
 
-//
-//group 'com.btk5h.skript-db'
-//version '0.3.0'
+//javadoc {
+//    classpath = sourceSets.compileClasspath
+//    destinationDir = projectDir
+//    options.docletpath = [files('/Users/hongseongmin/development/university/GIthub/skript-db/tools')]
+//    options.doclet = 'com.btk5h.skriptdoclet.SkriptDoclet'
+//}
 
 //task buildReadme(type: Javadoc) {
 //  source = sourceSets.main.allJava
 //  classpath = sourceSets.main.compileClasspath
 //  destinationDir = projectDir
-//  options.docletpath = [file('tools/skriptdoclet.jar')]
+//  options.  = [file('tools/skriptdoclet.jar')]
 //  options.doclet = 'com.btk5h.skriptdoclet.SkriptDoclet'
 //  options.addStringOption('file', 'README.md')
 //  options.addStringOption('markdown', '-quiet')

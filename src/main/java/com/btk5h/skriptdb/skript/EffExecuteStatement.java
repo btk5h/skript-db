@@ -1,13 +1,18 @@
 package com.btk5h.skriptdb.skript;
 
+import ch.njol.skript.Skript;
+import ch.njol.skript.effects.Delay;
+import ch.njol.skript.lang.*;
+import ch.njol.skript.variables.Variables;
+import ch.njol.util.Kleenean;
 import com.btk5h.skriptdb.SkriptDB;
 import com.btk5h.skriptdb.SkriptUtil;
 import com.zaxxer.hikari.HikariDataSource;
-
 import org.bukkit.Bukkit;
 import org.bukkit.event.Event;
-import org.eclipse.jdt.annotation.Nullable;
 
+import javax.annotation.Nullable;
+import javax.sql.rowset.CachedRowSet;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSetMetaData;
@@ -19,17 +24,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import javax.sql.rowset.CachedRowSet;
-
-import ch.njol.skript.Skript;
-import ch.njol.skript.effects.Delay;
-import ch.njol.skript.lang.Expression;
-import ch.njol.skript.lang.SkriptParser;
-import ch.njol.skript.lang.TriggerItem;
-import ch.njol.skript.lang.Variable;
-import ch.njol.skript.lang.VariableString;
-import ch.njol.skript.variables.Variables;
-import ch.njol.util.Kleenean;
 
 /**
  * Executes a statement on a database and optionally stores the result in a variable. Expressions
@@ -40,7 +34,7 @@ import ch.njol.util.Kleenean;
  * <p>
  * If a list variable, such as `{test::*}`, is passed, the query result will be mapped to the list
  * variable in the form `{test::<column name>::<row number>}`
- *
+ * <p>
  * Specifying `synchronously` will make skript-db execute the query on the event thread, which is useful for async
  * events. Note that skript-db will ignore this flag if you attempt to run this on the main thread.
  *
@@ -52,232 +46,232 @@ import ch.njol.util.Kleenean;
  * @since 0.1.0
  */
 public class EffExecuteStatement extends Delay {
-  static {
-    Skript.registerEffect(EffExecuteStatement.class,
-        "[(1¦synchronously)] execute %string% (in|on) %datasource% " +
-            "[and store [[the] (output|result)[s]] (to|in) [the] [var[iable]] %-objects%]");
-  }
+    private static final ExecutorService threadPool =
+        Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    static String lastError;
 
-  static String lastError;
-
-  private static final ExecutorService threadPool =
-      Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-
-  private Expression<String> query;
-  private Expression<HikariDataSource> dataSource;
-  private VariableString var;
-  private boolean isLocal;
-  private boolean isList;
-  private boolean isSync;
-
-  private void continueScriptExecution(Event e, String res) {
-    lastError = res;
-
-    if (getNext() != null) {
-      TriggerItem.walk(getNext(), e);
+    static {
+        Skript.registerEffect(
+            EffExecuteStatement.class,
+            "[(1¦synchronously)] execute %string% (in|on) %datasource% "
+                + "[and store [[the] (output|result)[s]] (to|in) [the] [var[iable]] %-objects%]"
+        );
     }
-  }
 
-  @Override
-  protected void execute(Event e) {
-    boolean isMainThread = Bukkit.isPrimaryThread();
+    private Expression<String> query;
+    private Expression<HikariDataSource> dataSource;
+    private VariableString var;
+    private boolean isLocal;
+    private boolean isList;
+    private boolean isSync;
 
-    if (isSync && !isMainThread) {
-      String result = executeStatement(e);
-      continueScriptExecution(e, result);
-    } else {
-      if (isSync) {
-        Skript.warning("A SQL query was attempted on the main thread!");
-      }
+    private void continueScriptExecution(Event e, String res) {
+        lastError = res;
 
-      CompletableFuture<String> sql =
-          CompletableFuture.supplyAsync(() -> executeStatement(e), threadPool);
-
-      sql.whenComplete((res, err) -> {
-        if (err != null) {
-          err.printStackTrace();
+        if (getNext() != null) {
+            TriggerItem.walk(getNext(), e);
         }
-
-        Bukkit.getScheduler().runTask(SkriptDB.getInstance(), () -> continueScriptExecution(e, res));
-      });
-    }
-  }
-
-  @Override
-  protected TriggerItem walk(Event e) {
-    debug(e, true);
-    SkriptUtil.delay(e);
-    execute(e);
-    return null;
-  }
-
-  private String executeStatement(Event e) {
-    HikariDataSource ds = dataSource.getSingle(e);
-
-    if (ds == null) {
-      return "Data source is not set";
     }
 
-    try (Connection conn = ds.getConnection();
-         PreparedStatement stmt = createStatement(e, conn)) {
+    @Override
+    protected void execute(Event e) {
+        boolean isMainThread = Bukkit.isPrimaryThread();
 
-      boolean hasResultSet = stmt.execute();
-
-      if (var != null) {
-        String baseVariable = var.toString(e)
-            .toLowerCase(Locale.ENGLISH);
-        if (isList) {
-          baseVariable = baseVariable.substring(0, baseVariable.length() - 1);
-        }
-
-        if (hasResultSet) {
-          CachedRowSet crs = SkriptDB.getRowSetFactory().createCachedRowSet();
-          crs.populate(stmt.getResultSet());
-
-          if (isList) {
-            populateVariable(e, crs, baseVariable);
-          } else {
-            crs.last();
-            setVariable(e, baseVariable, crs.getRow());
-          }
-        } else if (!isList) {
-          setVariable(e, baseVariable, stmt.getUpdateCount());
-        }
-      }
-    } catch (SQLException ex) {
-      return ex.getMessage();
-    }
-    return null;
-  }
-
-  private PreparedStatement createStatement(Event e, Connection conn) throws SQLException {
-    if (!(query instanceof VariableString)) {
-      return conn.prepareStatement(query.getSingle(e));
-    }
-
-    if (((VariableString) query).isSimple()) {
-      return conn.prepareStatement(SkriptUtil.getSimpleString(((VariableString) query)));
-    }
-
-    StringBuilder sb = new StringBuilder();
-    List<Object> parameters = new ArrayList<>();
-    Object[] objects = SkriptUtil.getTemplateString(((VariableString) query));
-    for (int i = 0; i < objects.length; i++) {
-      Object o = objects[i];
-      if (o instanceof String) {
-        sb.append(o);
-      } else {
-        Expression<?> expr = SkriptUtil.getExpressionFromInfo(o);
-
-        String before = getString(objects, i - 1);
-        String after = getString(objects, i + 1);
-        boolean standaloneString = false;
-
-        if (before != null && after != null) {
-          if (before.endsWith("'") && after.endsWith("'")) {
-            standaloneString = true;
-          }
-        }
-
-        Object expressionValue = expr.getSingle(e);
-
-        if (expr instanceof ExprUnsafe) {
-          sb.append(expressionValue);
-
-          if (standaloneString && expressionValue instanceof String) {
-            String rawExpression = ((ExprUnsafe) expr).getRawExpression();
-            Skript.warning(
-                String.format("Unsafe may have been used unnecessarily. Try replacing 'unsafe %1$s' with %1$s",
-                    rawExpression));
-          }
+        if (isSync && !isMainThread) {
+            String result = executeStatement(e);
+            continueScriptExecution(e, result);
         } else {
-          parameters.add(expressionValue);
-          sb.append('?');
+            if (isSync) {
+                Skript.warning("A SQL query was attempted on the main thread!");
+            }
 
-          if (standaloneString) {
-            Skript.warning("Do not surround expressions with quotes!");
-          }
+            CompletableFuture<String> sql =
+                CompletableFuture.supplyAsync(() -> executeStatement(e), threadPool);
+
+            sql.whenComplete((res, err) -> {
+                if (err != null) {
+                    err.printStackTrace();
+                }
+
+                Bukkit.getScheduler().runTask(SkriptDB.getInstance(), () -> continueScriptExecution(e, res));
+            });
         }
-      }
     }
 
-    PreparedStatement stmt = conn.prepareStatement(sb.toString());
-
-    for (int i = 0; i < parameters.size(); i++) {
-      stmt.setObject(i + 1, parameters.get(i));
+    @Override
+    protected TriggerItem walk(Event e) {
+        debug(e, true);
+        SkriptUtil.delay(e);
+        execute(e);
+        return null;
     }
 
-    return stmt;
-  }
+    private String executeStatement(Event e) {
+        HikariDataSource ds = dataSource.getSingle(e);
 
-  private String getString(Object[] objects, int index) {
-    if (index < 0 || index >= objects.length) {
-      return null;
+        if (ds == null) {
+            return "Data source is not set";
+        }
+
+        try (Connection conn = ds.getConnection();
+             PreparedStatement stmt = createStatement(e, conn)) {
+
+            boolean hasResultSet = stmt.execute();
+
+            if (var != null) {
+                String baseVariable = var.toString(e)
+                    .toLowerCase(Locale.ENGLISH);
+                if (isList) {
+                    baseVariable = baseVariable.substring(0, baseVariable.length() - 1);
+                }
+
+                if (hasResultSet) {
+                    CachedRowSet crs = SkriptDB.getRowSetFactory().createCachedRowSet();
+                    crs.populate(stmt.getResultSet());
+
+                    if (isList) {
+                        populateVariable(e, crs, baseVariable);
+                    } else {
+                        crs.last();
+                        setVariable(e, baseVariable, crs.getRow());
+                    }
+                } else if (!isList) {
+                    setVariable(e, baseVariable, stmt.getUpdateCount());
+                }
+            }
+        } catch (SQLException ex) {
+            return ex.getMessage();
+        }
+        return null;
     }
 
-    Object object = objects[index];
+    private PreparedStatement createStatement(Event e, Connection conn) throws SQLException {
+        if (!(query instanceof VariableString)) {
+            return conn.prepareStatement(query.getSingle(e));
+        }
 
-    if (object instanceof String) {
-      return (String) object;
+        if (((VariableString) query).isSimple()) {
+            return conn.prepareStatement(SkriptUtil.getSimpleString(((VariableString) query)));
+        }
+
+        StringBuilder sb = new StringBuilder();
+        List<Object> parameters = new ArrayList<>();
+        Object[] objects = SkriptUtil.getTemplateString(((VariableString) query));
+        for (int i = 0; i < objects.length; i++) {
+            Object o = objects[i];
+            if (o instanceof String) {
+                sb.append(o);
+            } else {
+                Expression<?> expr = SkriptUtil.getExpressionFromInfo(o);
+
+                String before = getString(objects, i - 1);
+                String after = getString(objects, i + 1);
+                boolean standaloneString = false;
+
+                if (before != null && after != null) {
+                    if (before.endsWith("'") && after.endsWith("'")) {
+                        standaloneString = true;
+                    }
+                }
+
+                Object expressionValue = expr.getSingle(e);
+
+                if (expr instanceof ExprUnsafe) {
+                    sb.append(expressionValue);
+
+                    if (standaloneString && expressionValue instanceof String) {
+                        String rawExpression = ((ExprUnsafe) expr).getRawExpression();
+                        Skript.warning(
+                            String.format("Unsafe may have been used unnecessarily. Try replacing 'unsafe %1$s' with %1$s",
+                                rawExpression));
+                    }
+                } else {
+                    parameters.add(expressionValue);
+                    sb.append('?');
+
+                    if (standaloneString) {
+                        Skript.warning("Do not surround expressions with quotes!");
+                    }
+                }
+            }
+        }
+
+        PreparedStatement stmt = conn.prepareStatement(sb.toString());
+
+        for (int i = 0; i < parameters.size(); i++) {
+            stmt.setObject(i + 1, parameters.get(i));
+        }
+
+        return stmt;
     }
 
-    return null;
-  }
+    private String getString(Object[] objects, int index) {
+        if (index < 0 || index >= objects.length) {
+            return null;
+        }
 
-  private void setVariable(Event e, String name, Object obj) {
-    Variables.setVariable(name.toLowerCase(Locale.ENGLISH), obj, e, isLocal);
-  }
+        Object object = objects[index];
 
-  private void populateVariable(Event e, CachedRowSet crs, String baseVariable)
-      throws SQLException {
-    ResultSetMetaData meta = crs.getMetaData();
-    int columnCount = meta.getColumnCount();
+        if (object instanceof String) {
+            return (String) object;
+        }
 
-    for (int i = 1; i <= columnCount; i++) {
-      String label = meta.getColumnLabel(i);
-      setVariable(e, baseVariable + label, label);
+        return null;
     }
 
-    int rowNumber = 1;
-    while (crs.next()) {
-      for (int i = 1; i <= columnCount; i++) {
-        setVariable(e, baseVariable + meta.getColumnLabel(i).toLowerCase(Locale.ENGLISH)
-            + Variable.SEPARATOR + rowNumber, crs.getObject(i));
-      }
-      rowNumber++;
+    private void setVariable(Event e, String name, Object obj) {
+        Variables.setVariable(name.toLowerCase(Locale.ENGLISH), obj, e, isLocal);
     }
-  }
 
-  @Override
-  public String toString(@Nullable Event e, boolean debug) {
-    return "execute " + query.toString(e, debug) + " in " + dataSource.toString(e, debug);
-  }
+    private void populateVariable(Event e, CachedRowSet crs, String baseVariable)
+        throws SQLException {
+        ResultSetMetaData meta = crs.getMetaData();
+        int columnCount = meta.getColumnCount();
 
-  @SuppressWarnings("unchecked")
-  @Override
-  public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed,
-                      SkriptParser.ParseResult parseResult) {
-    Expression<String> statementExpr = (Expression<String>) exprs[0];
-    if (statementExpr instanceof VariableString || statementExpr instanceof ExprUnsafe) {
-      query = statementExpr;
-    } else {
-      Skript.error("Database statements must be string literals. If you must use an expression, " +
-          "you may use \"%unsafe (your expression)%\", but keep in mind, you may be vulnerable " +
-          "to SQL injection attacks!");
-      return false;
+        for (int i = 1; i <= columnCount; i++) {
+            String label = meta.getColumnLabel(i);
+            setVariable(e, baseVariable + label, label);
+        }
+
+        int rowNumber = 1;
+        while (crs.next()) {
+            for (int i = 1; i <= columnCount; i++) {
+                setVariable(e, baseVariable + meta.getColumnLabel(i).toLowerCase(Locale.ENGLISH)
+                    + Variable.SEPARATOR + rowNumber, crs.getObject(i));
+            }
+            rowNumber++;
+        }
     }
-    dataSource = (Expression<HikariDataSource>) exprs[1];
-    Expression<?> expr = exprs[2];
-    isSync = parseResult.mark == 1;
-    if (expr instanceof Variable) {
-      Variable<?> varExpr = (Variable<?>) expr;
-      var = SkriptUtil.getVariableName(varExpr);
-      isLocal = varExpr.isLocal();
-      isList = varExpr.isList();
-    } else if (expr != null) {
-      Skript.error(expr + " is not a variable");
-      return false;
+
+    @Override
+    public String toString(@Nullable Event e, boolean debug) {
+        return "execute " + query.toString(e, debug) + " in " + dataSource.toString(e, debug);
     }
-    return true;
-  }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public boolean init(Expression<?>[] exprs, int matchedPattern, Kleenean isDelayed,
+                        SkriptParser.ParseResult parseResult) {
+        Expression<String> statementExpr = (Expression<String>) exprs[0];
+        if (statementExpr instanceof VariableString || statementExpr instanceof ExprUnsafe) {
+            query = statementExpr;
+        } else {
+            Skript.error("Database statements must be string literals. If you must use an expression, " +
+                "you may use \"%unsafe (your expression)%\", but keep in mind, you may be vulnerable " +
+                "to SQL injection attacks!");
+            return false;
+        }
+        dataSource = (Expression<HikariDataSource>) exprs[1];
+        Expression<?> expr = exprs[2];
+        isSync = parseResult.mark == 1;
+        if (expr instanceof Variable<?> varExpr) {
+            var = SkriptUtil.getVariableName(varExpr);
+            isLocal = varExpr.isLocal();
+            isList = varExpr.isList();
+        } else if (expr != null) {
+            Skript.error(expr + " is not a variable");
+            return false;
+        }
+        return true;
+    }
 }
